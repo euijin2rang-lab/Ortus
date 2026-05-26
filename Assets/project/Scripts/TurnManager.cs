@@ -2,37 +2,52 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// 턴 상태 열거형
 public enum TurnState
 {
-    PlayerTurn_Draw,       // 플레이어 드로우
-    PlayerTurn_WaitInput,  // 플레이어 고민 (입력 대기)
-    PlayerTurn_Discard,    // 플레이어 투산(버리기)
-    AITurn_Draw,           // AI 드로우
-    AITurn_Action,         // AI 고민 (자동 연산)
-    AITurn_Discard         // AI 투산(버리기)
+    PlayerTurn_Draw,       
+    PlayerTurn_WaitInput,  
+    PlayerTurn_Discard,    
+    AITurn_Draw,           
+    AITurn_Action,         
+    AITurn_Discard         
 }
 
 public class TurnManager : MonoBehaviour
 {
     [Header("[ Current Turn State ]")]
     public TurnState currentState;
-    public bool isGameActive = true; // 게임 진행 중 여부
+    public bool isGameActive = true; 
 
-    [Header("[ Turn Counter ]")]
-    public int currentTurnCount = 0; // 현재 진행된 총 턴 수 (최대 20)
+    [Header("[ Turn Counter (GDD 1.0) ]")]
+    public int currentTurn = 1; 
 
     [Header("[ References ]")]
     public DeckManager deckManager;
     public PlayerHand playerHand;
     public PlayerHand aiHand;
+    
+    [HideInInspector] public SimpleAI simpleAI; 
 
     [Header("[ Discard Pool ]")]
     public List<TileData> discardPool = new List<TileData>();
 
+    [Header("[ 배정할 캐릭터 데이터 ]")]
+    public CharacterData playerSelectedCharacter; 
+    public CharacterData aiSelectedCharacter;     
+
     private void Start()
     {
         isGameActive = true;
-        currentTurnCount = 0;
+        currentTurn = 1;
+
+        if (playerSelectedCharacter != null) playerHand.InitializeCharacter(playerSelectedCharacter);
+        if (aiSelectedCharacter != null) aiHand.InitializeCharacter(aiSelectedCharacter);
+
+        simpleAI = aiHand.GetComponent<SimpleAI>();
+        if (simpleAI == null) simpleAI = aiHand.gameObject.AddComponent<SimpleAI>();
+        simpleAI.Setup(aiHand, this);
+
         StartCoroutine(DelayedStart());
     }
 
@@ -44,32 +59,32 @@ public class TurnManager : MonoBehaviour
 
     private void Update()
     {
-        if (!isGameActive) return; // 게임이 종료되었다면 입력 무시
+        if (!isGameActive) return; 
 
         if (currentState == TurnState.PlayerTurn_WaitInput)
         {
             HandlePlayerInput();
+            HandleSkillInput(); // 스킬 입력 감지
         }
     }
 
     public void ChangeState(TurnState newState)
     {
-        if (!isGameActive) return; // 게임 종료 시 상태 전환 차단
+        if (!isGameActive) return;
+        if (CheckInstantDeath()) return; // 실시간 사망 체크
 
         currentState = newState;
-        Debug.Log($"<color=cyan>[상태 전환]</color> 현재 상태: <b>{currentState}</b> (총 {currentTurnCount}/20 턴)");
+        Debug.Log($"<color=cyan>[상태 전환]</color> 현재 상태: <b>{currentState}</b> (현재 매치 턴: {currentTurn}/10)");
 
         switch (currentState)
         {
             case TurnState.PlayerTurn_Draw:
-                currentTurnCount++;
-                if (CheckTurnOver()) return; // 턴 한도 초과 체크
                 StartCoroutine(PlayerDrawRoutine());
                 break;
 
             case TurnState.PlayerTurn_WaitInput:
                 LogCurrentHand();
-                Debug.Log("<color=yellow>[플레이어 턴]</color> 버릴 카드의 번호(1~8키)를 누르세요.");
+                Debug.Log($"<color=yellow>[플레이어 턴]</color> 현재 {currentTurn}턴. 버릴 카드의 번호(1~8키)를 누르세요. 스킬은 [S]키!");
                 break;
 
             case TurnState.PlayerTurn_Discard:
@@ -77,24 +92,17 @@ public class TurnManager : MonoBehaviour
                 break;
 
             case TurnState.AITurn_Draw:
-                currentTurnCount++;
-                if (CheckTurnOver()) return; // 턴 한도 초과 체크
-                StartCoroutine(AIDrawRoutine());
-                break;
-
-            case TurnState.AITurn_Action:
-                StartCoroutine(AIActionRoutine());
+                simpleAI.ExecuteTurn(); // AI 주도권 이양
                 break;
 
             case TurnState.AITurn_Discard:
+                currentTurn++; 
+                if (CheckTimeout()) return; // 10턴 초과 유국 판정
                 ChangeState(TurnState.PlayerTurn_Draw);
                 break;
         }
     }
 
-    // ----------------------------------------------------
-    // [플레이어] 드로우 및 투산
-    // ----------------------------------------------------
     private IEnumerator PlayerDrawRoutine()
     {
         Debug.Log("<color=green>[관성]</color> 플레이어가 덱에서 카드를 뽑습니다.");
@@ -105,11 +113,7 @@ public class TurnManager : MonoBehaviour
             deckManager.DrawCardTo(playerHand);
         }
 
-        // 8장이 된 순간 즉시 화료(결상) 체크를 수행
-        if (CheckWinningCondition(playerHand, aiHand))
-        {
-            yield break; // 결상 성공 시 턴 흐름 정지
-        }
+        if (CheckWinningCondition(playerHand, aiHand)) yield break;
 
         ChangeState(TurnState.PlayerTurn_WaitInput);
     }
@@ -128,6 +132,56 @@ public class TurnManager : MonoBehaviour
         }
     }
 
+private void HandleSkillInput()
+    {
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            // 🛡️ 1차 가드: 플레이어 컴포넌트 자체가 비어있는가 체크
+            if (playerHand == null) return;
+
+            // 🛡️ 2차 가드: 프로퍼티를 통해 기문 매니저를 가져왔는데도 비어있는지 체크 (1단계 덕분에 절대 안 비게 됨)
+            if (playerHand.gimunManager == null)
+            {
+                Debug.LogWarning("[스킬 락] 기문 매니저가 아직 생성되지 않았거나 초기화 중입니다.");
+                return;
+            }
+
+            CharacterData myChar = playerHand.characterData;
+            
+            // 🛡️ 3차 가드: 인스펙터에 에셋이 제대로 안 꽂혔거나 데이터가 날아갔을 경우 방어
+            if (myChar == null || string.IsNullOrEmpty(myChar.characterName))
+            {
+                Debug.LogWarning("[스킬 락] 인스펙터에 CharacterData 에셋이 유실되었거나 이름이 비어있습니다.");
+                return;
+            }
+
+            // 기본 코스트 분기 설정
+            int cost = 3; 
+            if (myChar.characterName.Contains("아리스")) cost = 4;
+            else if (myChar.characterName.Contains("카르키")) cost = 2;
+
+            if (playerHand.gimunManager.CanCast(cost))
+            {
+                FileSkillAction skillAction = null;
+
+                // 문자열 매칭 오류 방지를 위해 Contains 가용
+                if (myChar.characterName.Contains("아리스")) skillAction = new Action_Aris(playerHand, aiHand, this);
+                else if (myChar.characterName.Contains("멜리노에")) skillAction = new Action_Melinoe(playerHand, aiHand, this);
+                else if (myChar.characterName.Contains("네르")) skillAction = new Action_Ner(playerHand, aiHand);
+                else if (myChar.characterName.Contains("카르키")) skillAction = new Action_Karki(playerHand, aiHand, this);
+
+                if (skillAction != null)
+                {
+                    SkillSystem.Instance.EnqueueSkill(skillAction);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[기문 부족] 스킬 기문 게이지 부족! (필요 코스트: {cost} = 게이지 {cost * 20} / 현재 게이지: {playerHand.gimunManager.currentGauge})");
+            }
+        }
+    }
+
     private void PlayerDiscard(int index)
     {
         TileData discardedTile = playerHand.RemoveTile(index);
@@ -139,114 +193,64 @@ public class TurnManager : MonoBehaviour
         ChangeState(TurnState.PlayerTurn_Discard);
     }
 
-    // ----------------------------------------------------
-    // [AI] 드로우 및 투산
-    // ----------------------------------------------------
-    private IEnumerator AIDrawRoutine()
+    public bool CheckWinningCondition(PlayerHand attacker, PlayerHand defender)
     {
-        Debug.Log("<color=blue>[AI 턴]</color> AI가 덱에서 카드를 뽑습니다.");
-        yield return new WaitForSeconds(0.6f);
-
-        if (aiHand.handList.Count < 8)
-        {
-            deckManager.DrawCardTo(aiHand);
-        }
-
-        // AI도 8장이 된 순간 결상 체크
-        if (CheckWinningCondition(aiHand, playerHand))
-        {
-            yield break;
-        }
-
-        ChangeState(TurnState.AITurn_Action);
-    }
-
-    private IEnumerator AIActionRoutine()
-    {
-        Debug.Log("<color=blue>[AI 턴]</color> AI가 패를 고민 중...");
-        yield return new WaitForSeconds(0.8f);
-
-        int randomIndex = Random.Range(0, aiHand.handList.Count);
-        TileData discardedTile = aiHand.RemoveTile(randomIndex);
-
-        if (discardedTile != null)
-        {
-            discardPool.Add(discardedTile);
-            Debug.Log($"<color=red>[투산]</color> AI가 무작위로 <b>[{discardedTile.tileName}]</b>를 버렸습니다.");
-        }
-
-        ChangeState(TurnState.AITurn_Discard);
-    }
-
-    // ----------------------------------------------------
-    // [전투 연산] 결상 및 데미지 프로세스
-    // ----------------------------------------------------
-    private bool CheckWinningCondition(PlayerHand attacker, PlayerHand defender)
-    {
-        int multiplier;
+        int rawMultiplier;
         List<string> yaku;
 
-        // WinningChecker를 통해 결상 판정
-        if (WinningChecker.CheckWin(attacker.handList, out multiplier, out yaku))
+        if (WinningChecker.CheckWin(attacker.handList, out rawMultiplier, out yaku))
         {
-            isGameActive = false; // 루프 정지
+            isGameActive = false; 
+            float finalMultiplier = rawMultiplier / 100f;
 
-            Debug.Log($"<color=red><b>✨✨✨ 결상(화료) 발생!!! ({attacker.gameObject.name}) ✨✨✨</b></color>");
-            foreach (string y in yaku)
+            if (BattleManager.Instance != null)
             {
-                Debug.Log($"<color=pink>획득 족보: {y}</color>");
+                BattleManager.Instance.ProcessBattle(attacker, defender, finalMultiplier, yaku);
             }
 
-            // GDD 1.0 데미지 공식: Base ATK * 족보 배수
-            int finalDamage = Mathf.RoundToInt(attacker.baseATK * multiplier);
-            Debug.Log($"<color=yellow>[공격력 연산]</color> {attacker.gameObject.name}의 Base ATK({attacker.baseATK}) x 족보 배수({multiplier}배) = <b>최종 데미지: {finalDamage}</b>");
-
-            // 상대방 명운(HP) 깎기
-            defender.TakeDamage(finalDamage);
-
-            // 매치 종료 판정 호출
-            EvaluateMatchResult();
+            EvaluateFinalResult(false);
             return true;
         }
         return false;
     }
 
-    // ----------------------------------------------------
-    // [종료 처리] 매치 엔드포인트 및 승패 조건 판정
-    // ----------------------------------------------------
-    private bool CheckTurnOver()
+    private bool CheckInstantDeath()
     {
-        // 각자 10번씩 총 20턴이 지나면 종료
-        if (currentTurnCount > 20)
+        if (playerHand.currentHP <= 0 || aiHand.currentHP <= 0)
         {
             isGameActive = false;
-            Debug.Log("<color=red><b>[타임오버] 각자 10번의 턴(총 20턴)이 모두 소모되었습니다!</b></color>");
-            EvaluateMatchResult();
+            Debug.Log("<color=red><b>[사망 감지] 어느 한 진영의 명운(HP)이 전부 소진되었습니다!</b></color>");
+            EvaluateFinalResult(true); 
             return true;
         }
         return false;
     }
 
-    private void EvaluateMatchResult()
+    private bool CheckTimeout()
+    {
+        if (currentTurn > 10)
+        {
+            isGameActive = false;
+            Debug.Log("<color=red><b>[유국] 10턴 타임아웃 되었습니다!</b></color>");
+            EvaluateFinalResult(false); 
+            return true;
+        }
+        return false;
+    }
+
+    private void EvaluateFinalResult(bool isKO)
     {
         isGameActive = false;
-        Debug.Log("<color=green><b>-------------------------------------------</b></color>");
-        Debug.Log("<color=green><b>🏆 [매치 엔드] 최종 승패 판정 결과 🏆</b></color>");
-        Debug.Log($"플레이어 최종 HP: {playerHand.currentHP} | AI 최종 HP: {aiHand.currentHP}");
+        Debug.Log("<color=magenta><b>===========================================</b></color>");
+        if (isKO) Debug.Log("<color=magenta><b>💀 [매치 종료] HP 0 소진으로 인한 KO 승패 확정 💀</b></color>");
+        else Debug.Log("<color=cyan><b>⏳ [매치 종료] 10턴 제한 도달 정산 ⏳</b></color>");
+            
+        Debug.Log($"최종 스코어 -> 플레이어 명운: {playerHand.currentHP} | AI 명운: {aiHand.currentHP}");
 
-        if (playerHand.currentHP > aiHand.currentHP)
-        {
-            Debug.Log("<color=cyan><b>🎉 PLAYER WIN! 플레이어의 성명이 더 높아 매치에서 승리했습니다! 🎉</b></color>");
-        }
-        else if (aiHand.currentHP > playerHand.currentHP)
-        {
-            Debug.Log("<color=red><b>💀 AI WIN! AI의 성명이 더 높아 매치에서 패배했습니다... 💀</b></color>");
-        }
-        else
-        {
-            Debug.Log("<color=yellow><b>🤝 DRAW! 두 진영의 남은 성명이 완벽히 일치하여 무승부입니다! 🤝</b></color>");
-        }
-        Debug.Log("<color=green><b>-------------------------------------------</b></color>");
+        if (playerHand.currentHP > aiHand.currentHP) Debug.Log("<color=cyan><b>🎉 PLAYER WIN! 🎉</b></color>");
+        else if (aiHand.currentHP > playerHand.currentHP) Debug.Log("<color=red><b>💀 AI WIN! 💀</b></color>");
+        else Debug.Log("<color=yellow><b>🤝 DRAW! 🤝</b></color>");
+        Debug.Log("<color=magenta><b>===========================================</b></color>");
     }
 
     private void LogCurrentHand()
