@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c2f6d7d5aacfc44d88f4d8b1c853459, type: 3}
   m_Name: Karki
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
-  characterID: 
-  characterName: 
-  houseElement: 0
-  baseAtk: 0
-  maxHp: 0
+  characterID: CH_010
+  characterName: "\uCE74\uB974\uD0A4"
+  houseElement: 3
+  baseATK: 0
+  maxHp: 13000
   characterSkill:
     skillName: 
     description: 

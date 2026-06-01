@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c2f6d7d5aacfc44d88f4d8b1c853459, type: 3}
   m_Name: Aris
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
-  characterID: 
-  characterName: 
+  characterID: CH_002
+  characterName: "\uC544\uB9AC\uC2A4"
   houseElement: 0
-  baseAtk: 0
-  maxHp: 0
+  baseATK: 0
+  maxHp: 10000
   characterSkill:
     skillName: 
     description: 

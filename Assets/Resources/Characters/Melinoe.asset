@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c2f6d7d5aacfc44d88f4d8b1c853459, type: 3}
   m_Name: Melinoe
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
-  characterID: 
-  characterName: 
-  houseElement: 0
-  baseAtk: 0
-  maxHp: 0
+  characterID: CH_005
+  characterName: "\uBA5C\uB9AC\uB178\uC5D0"
+  houseElement: 1
+  baseATK: 0
+  maxHp: 14000
   characterSkill:
     skillName: 
     description: 

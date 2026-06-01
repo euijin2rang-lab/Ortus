@@ -149,6 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHand
   isAI: 1
+  characterData: {fileID: 0}
   maxHP: 0
   currentHP: 0
   baseATK: 0
@@ -400,6 +401,9 @@ GameObject:
   - component: {fileID: 1191201369}
   - component: {fileID: 1191201368}
   - component: {fileID: 1191201370}
+  - component: {fileID: 1191201371}
+  - component: {fileID: 1191201372}
+  - component: {fileID: 1191201373}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -453,11 +457,50 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TurnManager
   currentState: 0
   isGameActive: 1
-  currentTurnCount: 0
+  currentTurn: 1
   deckManager: {fileID: 1191201368}
   playerHand: {fileID: 1798899264}
   aiHand: {fileID: 375152615}
+  simpleAI: {fileID: 0}
   discardPool: []
+  playerSelectedCharacter: {fileID: 11400000, guid: d5fff6f364b8acd49a05b2ce97833463, type: 2}
+  aiSelectedCharacter: {fileID: 11400000, guid: a80a0e596830d474a9a73ae7265a14e3, type: 2}
+--- !u!114 &1191201371
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1191201366}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 785d8c1bc2fcafe469d37715fc2cf0dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BattleManager
+--- !u!114 &1191201372
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1191201366}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a62d978acbe086545957c6fcf9c910b9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillSystem
+--- !u!114 &1191201373
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1191201366}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 747976226ea55f844b546bb313abfbd7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DataTest
 --- !u!1 &1798899263
 GameObject:
   m_ObjectHideFlags: 0
@@ -488,6 +531,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHand
   isAI: 0
+  characterData: {fileID: 0}
   maxHP: 0
   currentHP: 0
   baseATK: 0
