@@ -1,6 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
+using Firebase.Functions; // Firebase 관련 using은 맨 위로 통합!
 
 // 턴 상태 열거형
 public enum TurnState
@@ -21,6 +24,9 @@ public class TurnManager : MonoBehaviour
 
     [Header("[ Turn Counter (GDD 1.0) ]")]
     public int currentTurn = 1; 
+
+    [Header("[ Room Info ]")]
+    public string currentRoomCode = "TEST_ROOM_01"; // 💡 에러 방지용: 서버에 보낼 방 코드 변수 추가
 
     [Header("[ References ]")]
     public DeckManager deckManager;
@@ -132,14 +138,12 @@ public class TurnManager : MonoBehaviour
         }
     }
 
-private void HandleSkillInput()
+    private void HandleSkillInput()
     {
         if (Input.GetKeyDown(KeyCode.S))
         {
-            // 🛡️ 1차 가드: 플레이어 컴포넌트 자체가 비어있는가 체크
             if (playerHand == null) return;
 
-            // 🛡️ 2차 가드: 프로퍼티를 통해 기문 매니저를 가져왔는데도 비어있는지 체크 (1단계 덕분에 절대 안 비게 됨)
             if (playerHand.gimunManager == null)
             {
                 Debug.LogWarning("[스킬 락] 기문 매니저가 아직 생성되지 않았거나 초기화 중입니다.");
@@ -148,14 +152,12 @@ private void HandleSkillInput()
 
             CharacterData myChar = playerHand.characterData;
             
-            // 🛡️ 3차 가드: 인스펙터에 에셋이 제대로 안 꽂혔거나 데이터가 날아갔을 경우 방어
             if (myChar == null || string.IsNullOrEmpty(myChar.characterName))
             {
                 Debug.LogWarning("[스킬 락] 인스펙터에 CharacterData 에셋이 유실되었거나 이름이 비어있습니다.");
                 return;
             }
 
-            // 기본 코스트 분기 설정
             int cost = 3; 
             if (myChar.characterName.Contains("아리스")) cost = 4;
             else if (myChar.characterName.Contains("카르키")) cost = 2;
@@ -164,7 +166,6 @@ private void HandleSkillInput()
             {
                 FileSkillAction skillAction = null;
 
-                // 문자열 매칭 오류 방지를 위해 Contains 가용
                 if (myChar.characterName.Contains("아리스")) skillAction = new Action_Aris(playerHand, aiHand, this);
                 else if (myChar.characterName.Contains("멜리노에")) skillAction = new Action_Melinoe(playerHand, aiHand, this);
                 else if (myChar.characterName.Contains("네르")) skillAction = new Action_Ner(playerHand, aiHand);
@@ -251,6 +252,9 @@ private void HandleSkillInput()
         else if (aiHand.currentHP > playerHand.currentHP) Debug.Log("<color=red><b>💀 AI WIN! 💀</b></color>");
         else Debug.Log("<color=yellow><b>🤝 DRAW! 🤝</b></color>");
         Debug.Log("<color=magenta><b>===========================================</b></color>");
+
+        // 💡 게임이 끝났을 때 자동으로 서버에 결과 전송!
+        EndGameRequest(); 
     }
 
     private void LogCurrentHand()
@@ -263,4 +267,36 @@ private void HandleSkillInput()
         handLog += "]";
         Debug.Log($"<color=white>{handLog}</color>");
     }
-}
+
+    // 💡 클래스 닫는 괄호(}) '안'으로 함수가 들어왔어!
+    public async void EndGameRequest()
+    {
+        Debug.Log("서버에 승패 검증 및 보상 요청 중...");
+
+        try
+        {
+            var functions = FirebaseFunctions.DefaultInstance;
+
+            var data = new Dictionary<string, object> 
+            { 
+                { "roomCode", currentRoomCode } 
+            };
+
+            var function = functions.GetHttpsCallable("validateAndEndMatch");
+            var result = await function.CallAsync(data);
+
+            var resultData = (Dictionary<object, object>)result.Data;
+            bool isSuccess = (bool)resultData["success"];
+
+            if (isSuccess)
+            {
+                string winnerUid = (string)resultData["winner"];
+                Debug.Log($"서버 검증 완료! 승리자 UID: {winnerUid}");
+            }
+        }
+        catch (FunctionsException e)
+        {
+            Debug.LogError($"검증 실패: {e.Message}");
+        }
+    }
+} // <-- TurnManager 클래스가 끝나는 진짜 괄호야!

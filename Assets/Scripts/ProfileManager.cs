@@ -72,4 +72,18 @@ public class ProfileManager : MonoBehaviour
         Debug.Log("아레나 캐릭터가 변경되었습니다!");
         confirmPopup.SetActive(false);
     }
+
+    // ProfileManager.cs 스크립트 안에 이 함수를 추가해!
+
+    [Header("장비 목록 화면")]
+    public GameObject equipListScreen; // 인스펙터에서 Screen_EquipDetail 또 연결해주면 됨
+
+    public void OnProfileEquipChangeClick()
+    {
+        // 1. 타겟을 "프로필 아레나 캐릭터"로 지정!
+        EquipmentManager.Instance.currentTargetCharId = "Arena_Defense_Char";
+        
+        // 2. 똑같은 장비 목록 창 열기
+        ScreenManager.Instance.OpenScreen(equipListScreen);
+    }
 }
